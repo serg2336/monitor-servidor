@@ -47,8 +47,7 @@ private function readWindows(): ?array
 if (PHP_OS_FAMILY !== 'Windows') {
 return null;
 }
-UTN FRRe · Programación IV TP · Monitor de Servidor con Laravel
-Cohorte 2026 Página 3 de 13
+
 $script = <<<'PS'
 $os = Get-CimInstance Win32_OperatingSystem
 $cpu = (Get-CimInstance Win32_Processor |
