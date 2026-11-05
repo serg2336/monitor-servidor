@@ -1,58 +1,45 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Monitor de Servidor + Logging de Seguridad
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Trabajo práctico de Programación IV (UTN FRRe). Sistema desarrollado en Laravel 13 que monitorea los recursos del sistema operativo (Windows) y registra intentos de autenticación para detectar ataques de fuerza bruta.
 
-## About Laravel
+## Sistema Operativo Usado
+Windows 11 (con XAMPP, PHP 8.3, MySQL).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Funcionalidades
+1. **Monitor del Servidor:** Lee datos de hardware (CPU, memoria, disco, temperatura) usando PowerShell (WMI) y PHP. Los expone en una vista web con polling y en una API JSON.
+2. **Logging y Detección:** Registra logins exitosos, fallidos y bloqueados. Aplica bloqueos automáticos de 10 minutos tras 5 fallos en 5 minutos.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Respuestas - TP1 (Monitor de Servidor)
 
-## Learning Laravel
+**1. ¿Por qué la temperatura suele aparecer como “No disponible” en Windows?**
+Porque la clase WMI `MSAcpi_ThermalZoneTemperature` requiere privilegios de administrador para ser consultada, y además no todas las placas madres exponen los sensores de temperatura a través de esta interfaz.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+**2. ¿Por qué el script de PowerShell nunca debe incluir datos que vengan del usuario?**
+Porque el método `shell_exec()` ejecuta comandos directamente en el sistema operativo. Si se concatena la entrada del usuario en el script de PowerShell, un atacante podría inyectar comandos maliciosos (Command Injection) y tomar el control del servidor.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+**3. ¿Qué riesgo tiene dejar /api/metrics sin autenticación en un servidor real?**
+Expone información sensible de la infraestructura (nombres de equipos, versiones de SO, uso de recursos) a cualquier persona en internet, lo que facilita la recopilación de información para planificar un ataque. En producción debería protegerse con Sanctum o similar.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+**4. Con polling cada 5 segundos, ¿cuántos pedidos por minuto recibe el servidor si hay 50 personas mirando?**
+50 personas * (60 segundos / 5 segundos) = **600 pedidos por minuto**.
 
-## Agentic Development
+**5. Si una app solo necesita la temperatura, ¿qué datos recibe de más al llamar a /api/metrics?**
+Recibe todo el objeto JSON (hostname, SO, PHP, disco, memoria, CPU, uptime, etc.). A esto se le llama *over-fetching*, y es el problema principal que resuelve GraphQL al permitir pedir solo campos específicos.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+---
 
-```bash
-composer require laravel/boost --dev
+## Respuestas - TP2 (Logging y Seguridad)
 
-php artisan boost:install
-```
+**1. ¿Qué IP concentra los fallos?, ¿puede afirmarse que existe un ataque?**
+En entorno local, `127.0.0.1`. No se puede afirmar que sea un ataque real solo por la cantidad de fallos, ya que podría ser un usuario que olvidó su contraseña. Se necesita más contexto (user-agents, horarios, intentos de cuentas distintas).
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+**2. ¿Qué efectos tendría bloquear una IP compartida?**
+Podría dejar sin acceso a usuarios legítimos que comparten la misma IP (por ejemplo, en una oficina con NAT o una universidad). Por eso es mejor combinar límites por IP con límites por cuenta de usuario.
 
-## Contributing
+**3. ¿Qué evidencias adicionales se necesitan?**
+Registros de user-agent, geolocalización de la IP, patrones de horarios, y saber si los intentos fueron dirigidos a múltiples cuentas (password spraying) o a una sola.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+**4. ¿Qué respuestas conviene automatizar?**
+Los bloqueos temporales de IP, las alertas en el log de seguridad y las notificaciones al administrador. La intervención humana debe quedar para investigar incidentes críticos o bloqueos permanentes.
